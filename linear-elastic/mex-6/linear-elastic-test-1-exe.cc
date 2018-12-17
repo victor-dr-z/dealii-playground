@@ -31,6 +31,7 @@
 // already to define the usual bi- or tri-linear elements, but we will now use
 // it for bi-quadratic elements:
 #include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/fe_system.h>
 // We will not read the grid from a file as in the previous example, but
 // generate it using a function of the library. However, we will want to write
 // out the locally refined grids (just the grid, not the solution) in each
@@ -63,14 +64,25 @@
 using namespace dealii;
 
 
-// @sect3{The <code>LinearElastic</code> class template}
+#include <deal.II/base/symmetric_tensor.h>
 
-// The main class is again almost unchanged. Two additions, however, are made:
-// we have added the <code>refine_grid</code> function, which is used to
-// adaptively refine the grid (instead of the global refinement in the
-// previous examples), and a variable which will hold the constraints. In
-// addition, we have added a destructor to the class for reasons that will
-// become clear when we discuss its implementation.
+// And a header that implements filters for iterators looping over all
+// cells. We will use this when selecting only those cells for output that are
+// owned by the present process in a %parallel program:
+#include <deal.II/grid/filtered_iterator.h>
+
+// And lastly a header that contains some functions that will help us compute
+// rotaton matrices of the local coordinate systems at specific points in the
+// domain.
+#include <deal.II/physics/transformations.h>
+
+// This is then simply C++ again:
+#include <fstream>
+#include <iostream>
+#include <iomanip>
+
+const int kMaxCycle = 1;
+
 template <int dim>
 class LinearElastic
 {
@@ -82,10 +94,13 @@ public:
 
 private:
   void setup_system ();
+  void make_grid();
+  void preassemble_matrix();
   void assemble_system ();
   void solve ();
+  void move_mesh();
   void refine_grid ();
-  void output_results (const unsigned int cycle) const;
+  void output_results () const;
 
   Triangulation<dim> triangulation;
 
@@ -104,8 +119,9 @@ private:
   SparseMatrix<double> system_matrix;
   SparsityPattern      sparsity_pattern;
 
-  Vector<double>       solution;
+  Vector<double>       incremental_disp;
   Vector<double>       system_rhs;
+  std::vector<SymmetricTensor<2, dim>> old_stress;
 };
 
 
@@ -251,12 +267,28 @@ void LinearElastic<dim>::solve ()
   PreconditionSSOR<> preconditioner;
   preconditioner.initialize(system_matrix, 1.2);
 
-  solver.solve (system_matrix, solution, system_rhs,
+  solver.solve (system_matrix, incremental_disp, system_rhs,
                 preconditioner);
 
-  constraints.distribute (solution);
+  constraints.distribute (incremental_disp);
 }
 
+template <int dim>
+void LinearElastic<dim>::move_mesh() {
+  std::vector<bool> touched(triangulation.n_vertices(), false);
+  for (typename DoFHandler<dim>::active_cell_iterator
+      cell = dof_handler.begin_active(); cell!=dof_handler.end(); ++cell) {
+    for (int v=0; v<GeometryInfo<dim>::vertices_per_cell; ++v)
+      if (!touched[cell->vertex_index[v]]) {
+        touched[cell->vertex_index[v]] = true;
+        Point<dim> disp;
+        for (int d=0; d<dim; ++d) {
+          disp[d] = incremental_disp(cell->vertex_dof_index(v,d));
+        }
+        cell->vertex(v) += disp;
+      }
+  }
+}
 
 // @sect4{LinearElastic::refine_grid}
 template <int dim>
@@ -280,57 +312,96 @@ void LinearElastic<dim>::refine_grid ()
 
 // @sect4{LinearElastic::output_results}
 template <int dim>
-void LinearElastic<dim>::output_results (const unsigned int cycle) const
+void LinearElastic<dim>::output_results () const
 {
-  {
-    GridOut grid_out;
-    std::ofstream output ("grid-" + std::to_string(cycle) + ".eps");
-    grid_out.write_eps (triangulation, output);
+  DataOut<dim> data_out;
+  data_out.attach_dof_handler (dof_handler);
+  std::vector<std::string> solution_names;
+  switch (dim)
+    {
+    case 1:
+      solution_names.emplace_back ("delta_x");
+      break;
+    case 2:
+      solution_names.emplace_back ("delta_x");
+      solution_names.emplace_back ("delta_y");
+      break;
+    case 3:
+      solution_names.emplace_back ("delta_x");
+      solution_names.emplace_back ("delta_y");
+      solution_names.emplace_back ("delta_z");
+      break;
+    default:
+      Assert (false, ExcNotImplemented());
+    }
+
+  data_out.add_data_vector (incremental_disp, solution_names);
+
+  // get the stress norms
+  Vector<double> stress_norms(triangulation.n_active_cells());
+  int cnt = 0;
+  for (typename Triangulation<dim>::active_cell_iterator
+       cell=dof_handler.begin_active(); cell!=dof_handler.end(); ++cell, ++cnt) {
+    SymmetricTensor<2, dim> accumulated_stress;
+    for (int i=0; i<quadrature_formula.size(); ++i)
+      accumulated_stress += reinterpret_cast<>
   }
 
-  {
-    DataOut<dim> data_out;
-    data_out.attach_dof_handler (dof_handler);
-    data_out.add_data_vector (solution, "solution");
-    data_out.build_patches ();
 
-    std::ofstream output ("solution-" + std::to_string(cycle) + ".vtk");
-    data_out.write_vtk (output);
-  }
+
+  data_out.build_patches ();
+
+  std::ofstream output ("linear-elastic.vtk");
+  data_out.write_vtk (output);
 }
 
 
 // @sect4{LinearElastic::run}
 template <int dim>
-void LinearElastic<dim>::run ()
+void LinearElastic<dim>::make_grid ()
 {
-  for (unsigned int cycle=0; cycle<8; ++cycle)
-    {
-      std::cout << "Cycle " << cycle << ':' << std::endl;
-
-      if (cycle == 0)
+  const double inner_radius = 0.8, outer_radius = 1;
+  GridGenerator::cylinder_shell (triangulation,
+                                 3, inner_radius, outer_radius);
+  for (typename Triangulation<dim>::active_cell_iterator
+       cell=triangulation.begin_active();
+       cell!=triangulation.end(); ++cell)
+    for (unsigned int f=0; f<GeometryInfo<dim>::faces_per_cell; ++f)
+      if (cell->face(f)->at_boundary())
         {
-          GridGenerator::hyper_ball (triangulation);
-          triangulation.refine_global (1);
+          const Point<dim> face_center = cell->face(f)->center();
+
+          if (face_center[2] == 0)
+            cell->face(f)->set_boundary_id (0);
+          else if (face_center[2] == 3)
+            cell->face(f)->set_boundary_id (1);
+          else if (std::sqrt(face_center[0]*face_center[0] +
+                             face_center[1]*face_center[1])
+                   <
+                   (inner_radius + outer_radius) / 2)
+            cell->face(f)->set_boundary_id (2);
+          else
+            cell->face(f)->set_boundary_id (3);
         }
-      else
-        refine_grid ();
+  triangulation.refine_global(2);
+}
 
+template <int dim>
+void LinearElastic<dim>::run () {
+    // Once all this is done, we can refine the mesh once globally:
+  make_grid();
+  std::cout << "   Number of active cells:       "
+            << triangulation.n_active_cells()
+            << std::endl;
 
-      std::cout << "   Number of active cells:       "
-                << triangulation.n_active_cells()
-                << std::endl;
+  setup_system ();
+  std::cout << "   number of degrees of freedom: "
+            << dof_handler.n_dofs()
+            << std::endl;
 
-      setup_system ();
+  travel_through_time();
 
-      std::cout << "   Number of degrees of freedom: "
-                << dof_handler.n_dofs()
-                << std::endl;
-
-      assemble_system ();
-      solve ();
-      output_results (cycle);
-    }
+  output_results ();
 }
 
 
@@ -342,8 +413,8 @@ int main ()
   // try to run the program as we did before...
   try
     {
-      LinearElastic<2> laplace_problem_2d;
-      laplace_problem_2d.run ();
+      LinearElastic<2> linear_elastic;
+      linear_elastic.run ();
     }
   catch (std::exception &exc)
     {
