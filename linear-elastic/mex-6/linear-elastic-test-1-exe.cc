@@ -82,6 +82,10 @@ using namespace dealii;
 #include <iomanip>
 
 const int kMaxCycle = 1;
+const int poly_order = 1;
+
+template <int dim>
+using STensor = SymmetricTensor<2, dim>;
 
 template <int dim>
 class LinearElastic
@@ -107,6 +111,12 @@ private:
   FESystem<dim>          fe;
   DoFHandler<dim>    dof_handler;
 
+  const QGauss<dim> q_rule;
+  const QGauss<dim-1> qf_rule;
+  const int nq;
+  const int nqf;
+  FEValues<dim> fv;
+  FEFaceValues<dim> fvf;
 
   // This is the new variable in the main class. We need an object which holds
   // a list of constraints to hold the hanging nodes and the boundary
@@ -121,8 +131,8 @@ private:
 
   Vector<double>       incremental_disp;
   Vector<double>       sys_rhs;
-  std::vector<SymmetricTensor<2, dim>> new_stress;
-  std::vector<SymmetricTensor<2, dim>> old_stress;
+  std::vector<std::vector<STensor>> new_stress;
+  std::vector<std::vector<STensor>> old_stress;
 };
 
 
@@ -148,8 +158,15 @@ double coefficient (const Point<dim> &p)
 template <int dim>
 LinearElastic<dim>::LinearElastic ()
   :
-  fe (FE_Q<dim>(1), dim),
-  dof_handler (triangulation)
+  fe (FE_Q<dim>(poly_order), dim),// fe space setting
+  dof_handler (triangulation),// dof handler
+  q_rule(poly_order+1),// volumetric quadrature rule
+  qf_rule(poly_order+1),// face quadrature rule
+  nq(q_rule.size()),// number of points in volumetric quad
+  nqf(qf_rule.size()),// number of points in face quad
+  fv(fe, q_rule, update_values | update_gradients | 
+      update_quadrature_points | update_JxW_values),
+
 {}
 
 
@@ -169,8 +186,8 @@ void LinearElastic<dim>::setup_system ()
 {
   dof_handler.distribute_dofs (fe);
 
-  solution.reinit (dof_handler.n_dofs());
-  system_rhs.reinit (dof_handler.n_dofs());
+  inc_disp.reinit (dof_handler.n_dofs());
+  sys_rhs.reinit (dof_handler.n_dofs());
 
   // We may now populate the ConstraintMatrix with the hanging node
   // constraints. Since we will call this function in a loop we first clear
@@ -196,7 +213,7 @@ void LinearElastic<dim>::setup_system ()
   sparsity_pattern.copy_from(dsp);
 
   // We may now, finally, initialize the sparse matrix:
-  system_matrix.reinit (sparsity_pattern);
+  system_mat.reinit (sparsity_pattern);
 }
 
 
@@ -325,7 +342,7 @@ void LinearElastic<dim>::output_results () const
     solution_names.emplace_back ("delta_x");
     break;
   case 2:
-    solution_names.emplace_back ("delta_x");
+    solution_names.emplace_back ("delta_x")
     solution_names.emplace_back ("delta_y");
     break;
   case 3:
@@ -336,16 +353,18 @@ void LinearElastic<dim>::output_results () const
   default:
     Assert (false, ExcNotImplemented());
   }
-  data_out.add_data_vector (incremental_disp, solution_names);
+  data_out.add_data_vector (inc_disp, solution_names);
 
   // write the stress norms
   Vector<double> stress_norms(triangulation.n_active_cells());
-  int cnt = 0;
   for (typename Triangulation<dim>::active_cell_iterator
        cell=dof_handler.begin_active(); cell!=dof_handler.end(); ++cell, ++cnt) {
     SymmetricTensor<2, dim> accumulated_stress;
-    for (int i=0; i<quadrature_formula.size(); ++i)
-      accumulated_stress += reinterpret_cast<>
+    auto id = cell->active_cell_index();
+    for (int i=0; i<q_rule.size(); ++i)
+      accumulated_stress += old_stress[id][q]
+    accumulated_stress /= q_rule.size();
+    stress_norms[id] = accumulated_stress.norm();
   }
 
 
