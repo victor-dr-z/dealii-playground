@@ -82,13 +82,10 @@ using namespace dealii;
 #include <iomanip>
 
 const int kMaxCycle = 1;
-<<<<<<< HEAD:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
 const int poly_order = 1;
 
 template <int dim>
 using STensor = SymmetricTensor<2, dim>;
-=======
->>>>>>> 47a7d309e5d0bb7f2a4ea89a83121ef3c05792f4:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
 
 template <int dim>
 class LinearElastic
@@ -133,14 +130,9 @@ private:
   SparsityPattern      sparsity_pattern;
 
   Vector<double>       incremental_disp;
-<<<<<<< HEAD:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
   Vector<double>       sys_rhs;
   std::vector<std::vector<STensor>> new_stress;
   std::vector<std::vector<STensor>> old_stress;
-=======
-  Vector<double>       system_rhs;
-  std::vector<SymmetricTensor<2, dim>> old_stress;
->>>>>>> 47a7d309e5d0bb7f2a4ea89a83121ef3c05792f4:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
 };
 
 
@@ -342,7 +334,6 @@ void LinearElastic<dim>::output_results () const
 {
   DataOut<dim> data_out;
   data_out.attach_dof_handler (dof_handler);
-<<<<<<< HEAD:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
 
   // write the displacement
   std::vector<std::string> solution_names;
@@ -377,40 +368,6 @@ void LinearElastic<dim>::output_results () const
   }
 
 
-=======
-  std::vector<std::string> solution_names;
-  switch (dim)
-    {
-    case 1:
-      solution_names.emplace_back ("delta_x");
-      break;
-    case 2:
-      solution_names.emplace_back ("delta_x");
-      solution_names.emplace_back ("delta_y");
-      break;
-    case 3:
-      solution_names.emplace_back ("delta_x");
-      solution_names.emplace_back ("delta_y");
-      solution_names.emplace_back ("delta_z");
-      break;
-    default:
-      Assert (false, ExcNotImplemented());
-    }
-
-  data_out.add_data_vector (incremental_disp, solution_names);
-
-  // get the stress norms
-  Vector<double> stress_norms(triangulation.n_active_cells());
-  int cnt = 0;
-  for (typename Triangulation<dim>::active_cell_iterator
-       cell=dof_handler.begin_active(); cell!=dof_handler.end(); ++cell, ++cnt) {
-    SymmetricTensor<2, dim> accumulated_stress;
-    for (int i=0; i<quadrature_formula.size(); ++i)
-      accumulated_stress += reinterpret_cast<>
-  }
-
-
->>>>>>> 47a7d309e5d0bb7f2a4ea89a83121ef3c05792f4:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
 
   data_out.build_patches ();
 
@@ -421,12 +378,7 @@ void LinearElastic<dim>::output_results () const
 
 // @sect4{LinearElastic::run}
 template <int dim>
-<<<<<<< HEAD:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
 void LinearElastic<dim>::make_grid () {
-=======
-void LinearElastic<dim>::make_grid ()
-{
->>>>>>> 47a7d309e5d0bb7f2a4ea89a83121ef3c05792f4:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
   const double inner_radius = 0.8, outer_radius = 1;
   GridGenerator::cylinder_shell (triangulation,
                                  3, inner_radius, outer_radius);
@@ -434,7 +386,6 @@ void LinearElastic<dim>::make_grid ()
        cell=triangulation.begin_active();
        cell!=triangulation.end(); ++cell)
     for (unsigned int f=0; f<GeometryInfo<dim>::faces_per_cell; ++f)
-<<<<<<< HEAD:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
       if (cell->face(f)->at_boundary()) {
         const Point<dim> face_center = cell->face(f)->center();
 
@@ -450,24 +401,6 @@ void LinearElastic<dim>::make_grid ()
         else
           cell->face(f)->set_boundary_id (3);
       }
-=======
-      if (cell->face(f)->at_boundary())
-        {
-          const Point<dim> face_center = cell->face(f)->center();
-
-          if (face_center[2] == 0)
-            cell->face(f)->set_boundary_id (0);
-          else if (face_center[2] == 3)
-            cell->face(f)->set_boundary_id (1);
-          else if (std::sqrt(face_center[0]*face_center[0] +
-                             face_center[1]*face_center[1])
-                   <
-                   (inner_radius + outer_radius) / 2)
-            cell->face(f)->set_boundary_id (2);
-          else
-            cell->face(f)->set_boundary_id (3);
-        }
->>>>>>> 47a7d309e5d0bb7f2a4ea89a83121ef3c05792f4:linear-elastic/mex-6/linear-elastic-test-1-exe.cc
   triangulation.refine_global(2);
 }
 
