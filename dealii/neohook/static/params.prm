@@ -1,0 +1,3 @@
+set fem polynomial order = 1
+set domain geometry shape = cube
+set solver type = direct
