@@ -1,3 +1,7 @@
 set fem polynomial order = 1
-set domain geometry shape = cube
+set domain geometry shape = rectangle
 set solver type = direct
+set dimension = 3
+set number of cells = 10, 10, 10
+set side lengths = 1.0, 1.0, 1.0
+set uniform refinements = 2
