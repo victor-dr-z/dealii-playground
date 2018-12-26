@@ -25,6 +25,10 @@ void DeclareParams() {
       dealii::Patterns::Integer(), "");
 }
 
+void ParseInput(char * argv[]) {
+  GlobPrm.parse_input(argv[1]);
+}
+
 /*!
  This function returns a static const reference to the params::GlobPrm, which
  is a dealii::ParameterHandler object.

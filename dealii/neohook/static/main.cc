@@ -7,7 +7,7 @@ int main(int argc, char * argv[]) {
     return 1;
   }
   params::DeclareParams();
-  params::GlobPrm.parse_input(argv[1]);
+  params::ParseInput(argv);
   dealii::Utilities::MPI::MPI_InitFinalize mpi_init(argc, argv,
       dealii::numbers::invalid_unsigned_int);
   auto dim = params::GetParam("dimension");
