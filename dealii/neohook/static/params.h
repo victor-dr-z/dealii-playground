@@ -3,13 +3,17 @@
 
 #include <deal.II/base/parameter_handler.h>
 
-struct Params {
-  Params(const dealii::ParameterHandler & prm);
+namespace params
+{
+  dealii::ParameterHandler GlobPrm;
 
-  const int poly_order;//!< polynomial order in FEA
-  const std::string domain_shape;//!< name of the domain geometry shape
-  const std::string solver_type;//!< to determine if we use iterative or direct solver
-};
+  void DeclareParams() {
+    GlobPrm.declare_entry("fem polynomial order","1",
+        dealii::Patterns::Integer(),"");
+    GlobPrm.declare_entry("domain geometry hyper shape", "rectangle",
+        dealii::Patterns::Selection("rectangle"));
+  }
+}
 
 Params::Params(const dealii::ParameterHandler & prm)
     :
