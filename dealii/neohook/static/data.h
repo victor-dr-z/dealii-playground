@@ -3,8 +3,8 @@
 
 template <int dim>
 struct Data {
-  Data(const dealii::)
-  
+  Data();
+
   dealii::TrilinosWrappers::MPI::SparseMatrix sys_mat;
   dealii::TrilinosWrappers::MPI::Vector sys_sol;
   dealii::TrilinosWrappers::MPI::Vector sys_rhs;
