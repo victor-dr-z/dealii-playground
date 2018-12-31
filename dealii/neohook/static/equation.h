@@ -29,19 +29,19 @@ class Equation {
   void SolveEqu();
  private:
   const std::string solver_type_;
-  std::shared_ptr<Data<dim>> & dat_p_;
+  std::shared_ptr<Data<dim>> & dat_;
 };
 
 template <int dim>
-Equation<dim>::Equation (std::shared_ptr<Data<dim>> & dat_p_)
+Equation<dim>::Equation (std::shared_ptr<Data<dim>> & dat_)
     :
     solver_type_(params::GetParam<std::string>("solver type")),
-    dat_p_(dat_p) {}
+    dat_(dat_p) {}
 
 template <int dim>
 Equation<dim>::AssembleSystem() {
   for (typename dealii::DoFHandler<dim>::active_cell_iterator
-      cell=dat_p_->dof_handler.begin_active(); cell!=dat_p_->dof_handler.end(); ++cell) {
+      cell=dat_->dof_handler.begin_active(); cell!=dat_->dof_handler.end(); ++cell) {
     if (cell->is_locally_owned()) {
       fv.reinit(cell);
       fadd epsilon = 0;
@@ -61,7 +61,7 @@ void Equation<dim>::SolveEqu() {
       dealii::TrilinosWrappers::SolverDirect::AdditionalData additional_data (
           true, "Amesos_Superludist");
       dealii::TrilinosWrappers::SolverDirect direct(cn, additional_data);
-      direct.solve(dat_p_->sys_mat, dat_p_->sys_sol, dat_p_->sys_rhs);
+      direct.solve(dat_->sys_mat, dat_->sys_sol, dat_->sys_rhs);
     }
     default: {
       std::cerr << "Iterative scheme not implemented yet";
