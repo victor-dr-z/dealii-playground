@@ -1,5 +1,5 @@
-#ifndef NEOHOOK_DRIVER_H__
-#define NEOHOOK_DRIVER_H__
+#ifndef FSI_DRIVER_H__
+#define FSI_DRIVER_H__
 
 template <int dim>
 class Driver {
@@ -59,4 +59,4 @@ Driver<dim>::SetupSystem() {
   dealii::DynamicSparsity
 }
 
-#endif // NEOHOOK_DRIVER_H__
+#endif // FSI_DRIVER_H__
